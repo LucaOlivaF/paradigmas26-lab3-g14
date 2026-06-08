@@ -7,25 +7,26 @@ object JsonParser {
    * Parse Reddit JSON feed and extract posts.
    * @param jsonContent JSON string from Reddit API
    * @param subscriptionName name of subscription (for logging)
-   * @return list of posts, empty list if parsing fails
+   * @return Right(posts) on success, Left(warningMessage) on failure.
    */
-  def parsePosts(jsonContent: String, subscriptionName: String): List[Post] = {
+  def parsePosts(jsonContent: String, subscription: Subscription): Either[String, List[Post]] = {
     try {
       implicit val formats: Formats = DefaultFormats
-
+ 
       val json = parse(jsonContent)
       val children = (json \ "data" \ "children").extract[List[JValue]]
-
-      children.flatMap { child =>
+ 
+      val posts = children.flatMap { child =>
         val data = child \ "data"
-        val title = (data \ "title").extract[String]
-        val selftext = (data \ "selftext").extract[String]
+        val title    = (data \ "title").extractOpt[String].getOrElse("")
+        val selftext = (data \ "selftext").extractOpt[String].getOrElse("")
         List(Post(title, selftext))
       }
+ 
+      Right(posts)
     } catch {
       case _: Exception =>
-        println(s"Warning: Failed to parse JSON from '$subscriptionName'")
-        List()
+        Left(s"Warning: Failed to parse posts from '${subscription.name}' (${subscription.url})")
     }
   }
 }
