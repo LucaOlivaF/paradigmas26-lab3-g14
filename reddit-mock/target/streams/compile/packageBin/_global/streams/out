@@ -1,9 +1,0 @@
-[0m[[0m[0mdebug[0m] [0m[0mPackaging /home/fabrizio/Escritorio/tercer año/paradigmas26/paradigmas26-lab3-g14/reddit-mock/target/scala-2.13/reddit-mock-server_2.13-0.1.0.jar ...[0m
-[0m[[0m[0mdebug[0m] [0m[0mInput file mappings:[0m
-[0m[[0m[0mdebug[0m] [0m[0m	MockRedditApi$JsonHandler.class[0m
-[0m[[0m[0mdebug[0m] [0m[0m	  /home/fabrizio/Escritorio/tercer año/paradigmas26/paradigmas26-lab3-g14/reddit-mock/target/scala-2.13/classes/MockRedditApi$JsonHandler.class[0m
-[0m[[0m[0mdebug[0m] [0m[0m	MockRedditApi.class[0m
-[0m[[0m[0mdebug[0m] [0m[0m	  /home/fabrizio/Escritorio/tercer año/paradigmas26/paradigmas26-lab3-g14/reddit-mock/target/scala-2.13/classes/MockRedditApi.class[0m
-[0m[[0m[0mdebug[0m] [0m[0m	MockRedditApi$.class[0m
-[0m[[0m[0mdebug[0m] [0m[0m	  /home/fabrizio/Escritorio/tercer año/paradigmas26/paradigmas26-lab3-g14/reddit-mock/target/scala-2.13/classes/MockRedditApi$.class[0m
-[0m[[0m[0mdebug[0m] [0m[0mDone packaging.[0m
