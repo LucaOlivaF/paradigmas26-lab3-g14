@@ -1,134 +1,76 @@
-import org.apache.spark.sql.SparkSession
-
 object Main {
   def main(args: Array[String]): Unit = {
- 
-    // ─────────────────────────────────────────────────────────────
-    // Parseamos los argumentos de línea de comando (igual que antes)
-    // ─────────────────────────────────────────────────────────────
+    // Parse command-line arguments
     val cmdArgs = CommandLineArgs.parse(args) match {
       case Some(parsed) => parsed
-      case None => return
+      case None => return // scopt prints error messages
     }
 
-    val spark = SparkSession.builder()
-      .appName("RedditNER")
-      .master("local[*]")
-      .getOrCreate()
- 
-    // Silenciamos los logs verbosos de Spark para que la salida sea legible
-    spark.sparkContext.setLogLevel("ERROR")
- 
-    val sc = spark.sparkContext
- 
-    val subscriptions: List[Subscription] = FileIO.readSubscriptions(cmdArgs.subscriptionFile) match {
-      case Left(errorMsg) =>
-        // Error fatal: archivo no encontrado o JSON inválido
-        println(errorMsg)
-        spark.stop()
-        return
- 
-      case Right(subOpts) =>
-        // Imprimimos warning por cada suscripción malformada (None)
-        subOpts.foreach {
-          case None => println("Warning: Skipping malformed subscription (missing 'name' or 'url' field)")
-          case _    => ()
-        }
-        // Nos quedamos solo con las válidas (Some)
-        subOpts.flatten
-    }
- 
-    if (subscriptions.isEmpty) {
-      println("Error: No valid subscriptions found")
-      spark.stop()
-      return
-    }
- 
-    val subscriptionsRDD = sc.parallelize(subscriptions)
- 
-  
-    val allPostsRDD = subscriptionsRDD.flatMap { subscription =>
- 
-      val feedResult = FileIO.downloadFeed(subscription)
- 
-      feedResult match {
-        case Left(warningMsg) =>
-          println(warningMsg)
-          List.empty[Post]
- 
-        case Right(jsonContent) =>
-          JsonParser.parsePosts(jsonContent, subscription) match {
-            case Left(warningMsg) =>
-              println(warningMsg)
-              List.empty[Post]
- 
-            case Right(posts) =>
-              posts
-          }
-      }
+    // Load subscriptions
+    val subscriptionOpts = FileIO.readSubscriptions(cmdArgs.subscriptionFile)
+
+    // Filter out malformed subscriptions (None values)
+    val subscriptions = subscriptionOpts.flatten
+
+    // Download feeds and parse posts, tracking success/failure
+    val downloadResults = subscriptions.map { subscription =>
+      val feedOpt = FileIO.downloadFeed(subscription.url)
+      val posts = feedOpt.fold(List[Post]())(JsonParser.parsePosts(_, subscription.name))
+      (feedOpt.isDefined, posts)
     }
 
-    val filteredPostsRDD = allPostsRDD.filter { post =>
-      post.title.nonEmpty &&
-      post.selftext.nonEmpty &&
-      post.selftext.trim.nonEmpty
-    }
- 
-    val totalDownloaded = allPostsRDD.count()
-    val totalFiltered   = filteredPostsRDD.count()
-    val postsFiltered   = totalDownloaded - totalFiltered
- 
-    val feedResultsRDD = subscriptionsRDD.map { subscription =>
-      FileIO.downloadFeed(subscription).isRight
-    }
-    val feedsSuccess = feedResultsRDD.filter(identity).count()
-    val feedsFailed  = feedResultsRDD.filter(!_).count()
- 
-    val avgChars: Long = if (totalFiltered > 0) {
-      val totalChars = filteredPostsRDD.map(p => p.title.length + p.selftext.length).sum().toLong
-      totalChars / totalFiltered
-    } else 0L
- 
+    // Count feed successes/failures
+    val feedsSuccess = downloadResults.count(_._1)
+    val feedsFailed = downloadResults.length - feedsSuccess
+
+    // Flatten all posts and count JSON parse failures
+    val allPosts = downloadResults.flatMap(_._2)
+    val postsSuccess = allPosts.length
+    val postsFailed = downloadResults.count(_._2.isEmpty)
+
+    // Filter empty posts
+    val filteredPosts = Analyzer.filterEmptyPosts(allPosts)
+    val postsFiltered = allPosts.length - filteredPosts.length
+
+    // Calculate average characters in filtered posts
+    val totalChars = filteredPosts.map(post => post.title.length + post.selftext.length).sum
+    val avgChars = if (filteredPosts.nonEmpty) totalChars / filteredPosts.length else 0
+
+    // Prepare statistics
     val stats = Map(
-      "feedsSuccess"   -> feedsSuccess.toInt,
-      "feedsFailed"    -> feedsFailed.toInt,
-      "postsSuccess"   -> totalDownloaded.toInt,
-      "postsFailed"    -> 0,
-      "postsFiltered"  -> postsFiltered.toInt,
-      "avgChars"       -> avgChars.toInt
+      "feedsSuccess" -> feedsSuccess,
+      "feedsFailed" -> feedsFailed,
+      "postsSuccess" -> postsSuccess,
+      "postsFailed" -> postsFailed,
+      "postsFiltered" -> postsFiltered,
+      "avgChars" -> avgChars
     )
- 
+
+    // Print output
     println(Formatters.formatProcessingStats(stats))
     println()
- 
-   
-    if (filteredPostsRDD.isEmpty()) {
+
+    // Check if we have any posts to process
+    if (filteredPosts.isEmpty) {
       println("Error: No valid posts downloaded after filtering")
-      spark.stop()
       return
     }
- 
-    val entitiesDir = new java.io.File(cmdArgs.entitiesDir)
-    if (!entitiesDir.exists() || !entitiesDir.isDirectory) {
-      println(s"Error: entities directory '${cmdArgs.entitiesDir}' not found")
-      spark.stop()
-      return
-    }
- 
+
+    // Load dictionaries
     val dictionary = Dictionary.loadAll(cmdArgs.entitiesDir)
- 
-    val allEntities = filteredPostsRDD.flatMap { post =>
+
+    // Detect entities in all posts (combine title and selftext)
+    val allEntities = filteredPosts.flatMap { post =>
       val combinedText = post.title + " " + post.selftext
       Analyzer.detectEntities(combinedText, dictionary)
-    }.collect().toList
- 
+    }
+
+    // Count entities
     val entityCounts = Analyzer.countEntities(allEntities)
-    val typeStats    = Analyzer.countByType(allEntities)
- 
+    val typeStats = Analyzer.countByType(allEntities)
+
     println(Formatters.formatTypeStats(typeStats))
     println()
     println(Formatters.formatEntityStats(entityCounts, cmdArgs.topK))
- 
-    spark.stop()
   }
 }

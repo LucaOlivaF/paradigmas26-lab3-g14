@@ -1,4 +1,4 @@
-abstract class NamedEntity(val text: String) extends Serializable {
+abstract class NamedEntity(val text: String) {
   def entityType: String
 
   def describe: String = s"[$entityType] $text"
