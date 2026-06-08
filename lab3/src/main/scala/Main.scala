@@ -5,7 +5,7 @@ object Main {
       case Some(parsed) => parsed
       case None => return // scopt prints error messages
     }
-
+//.
     // Load subscriptions
     val subscriptionOpts = FileIO.readSubscriptions(cmdArgs.subscriptionFile)
 
