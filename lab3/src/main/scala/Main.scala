@@ -10,7 +10,7 @@ object Main {
       case Some(parsed) => parsed
       case None => return
     }
-
+    
     val spark = SparkSession.builder()
       .appName("RedditNER")
       .master("local[*]")
