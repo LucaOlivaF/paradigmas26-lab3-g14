@@ -22,3 +22,19 @@ Dada la paralelización de los workers con Spark, las restricciones del mecanism
 - Serialización: Cuando le pasás una función en el Driver, Spark tiene que empaquetar ese código y enviarlo a través de la red hacia todos los Workers. Por lo tanto, tanto la función como cualquier variable externa que la función utilice adentro deben ser serializables. Si intentás usar objetos no serializables, el programa va a crashear con una excepción de serialización.
 - Estado compartido: Dado que los workers son procesos independientes, si la función intenta modificar una variable externa normal, cada worker modificará una copia local de esa variable. El valor original en el Driver nunca cambiará.
 - Efectos secundarios: Las funciones que se pasan a Spark deberían ser "puras" (como lo define el paradigma funcional). Si un worker falla por un problema de red o falta de memoria, Spark es tolerante a fallos y puede volver a ejecutar esa misma tarea en otro worker. Si la función tenía un efecto secundario, al reejecutarse la tarea podría volver a producir ese efecto secundario.
+
+
+## Ejercicio 4
+### a) ¿Por qué los Accumulators solo deben usarse para métricas y no para tomar decisiones lógicas dentro de las etapas distribuidas del pipeline? ¿En qué situación un Accumulator puede dar un valor incorrecto?
+Los Accumulators están diseñados exclusivamente para operaciones de solo escritura desde el punto de vista de los workers. El clúster no garantiza que un worker pueda leer el valor acumulado por otro en tiempo real durante la ejecución de una etapa distribuida. Si se intentara utilizar el valor de un acumulador para alterar el flujo lógico o aplicar un condicional (if/else) dentro de un map o filter, el comportamiento del programa sería indeterminado, rompiendo el paradigma funcional y de inmutabilidad sobre el que se construye Apache Spark.
+Un acumulador puede arrojar un valor duplicado o incorrecto cuando se encuentra dentro de una transformacion si se produce un error dentro de esta. Esto entraria dentro del caso de efectos secundarios que mencionamos antes, donde Spark vuelve a ejecutar el worker despues del error, modificando el accumulator nuevamente. 
+
+### b) ¿En qué momento del pipeline está disponible el valor de un Accumulator para ser leído por el driver?
+El valor de un Accumulator solo se encuentra disponible y consolidado para ser leído por el driver únicamente después de que una acción terminal se haya completado con éxito (por ejemplo, luego de un .count() o un .collect()). Esto se debe a que el accumulator no es procesado hasta que todos los workers envien sus contadores al driver. Si se intenta leer antes de la acción terminal, el acumulador devolverá siempre su valor inicial (0).
+
+### c) Comparen el tiempo que tarda cada etapa del pipeline que midieron en la versión no paralelizada y la versión con Spark. ¿Qué conclusiones pueden sacar? Para la cantidad de datos que estamos trabajando, ¿se aprecia la diferencia? Justifique por qué. Nota: La comparación debe realizarse en ejecuciones sobre la misma computadora y la misma conexión a internet.
+
+
+
+
+

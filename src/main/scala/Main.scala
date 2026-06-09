@@ -20,6 +20,11 @@ object Main {
     spark.sparkContext.setLogLevel("ERROR")
  
     val sc = spark.sparkContext
+
+    val feedsSuccess = sc.longAccumulator("Feeds descargados con exito")
+    val feedsFailed = sc.longAccumulator("Feeds que fallaron")
+    val postsSuccess = sc.longAccumulator("Posts descargados en total")
+    val postsFailed = sc.longAccumulator("Posts descartados por tener texto nulo o vacio")
  
     val subscriptions: List[Subscription] = FileIO.readSubscriptions(cmdArgs.subscriptionFile) match {
       case Left(errorMsg) =>
@@ -54,46 +59,56 @@ object Main {
       feedResult match {
         case Left(warningMsg) =>
           println(warningMsg)
+          feedsFailed.add(1)
           List.empty[Post]
- 
+
         case Right(jsonContent) =>
           JsonParser.parsePosts(jsonContent, subscription) match {
             case Left(warningMsg) =>
+              feedsFailed.add(1)
               println(warningMsg)
               List.empty[Post]
  
             case Right(posts) =>
+              feedsSuccess.add(1)
               posts
           }
       }
     }
 
+
     val filteredPostsRDD = allPostsRDD.filter { post =>
-      post.title.nonEmpty &&
-      post.selftext.nonEmpty &&
-      post.selftext.trim.nonEmpty
+      val nonEmpty =
+        post.title.nonEmpty &&
+        post.selftext.nonEmpty &&
+        post.selftext.trim.nonEmpty
+      if(nonEmpty) {
+        postsSuccess.add(1)
+        true
+      } else {
+        postsFailed.add(1)
+        false
+      }
     }
  
-    val totalDownloaded = allPostsRDD.count()
-    val totalFiltered   = filteredPostsRDD.count()
-    val postsFiltered   = totalDownloaded - totalFiltered
+    val t1_inicio = System.currentTimeMillis()
+
+    val totalDownloaded = filteredPostsRDD.count()
+    val t1_fin = System.currentTimeMillis()
+    val postsFiltered   =  postsFailed.value
+
+    println(s"Accion terminal 1: ${(t1_fin - t1_inicio) / 1000.0} segundos")
  
-    val feedResultsRDD = subscriptionsRDD.map { subscription =>
-      FileIO.downloadFeed(subscription).isRight
-    }
-    val feedsSuccess = feedResultsRDD.filter(identity).count()
-    val feedsFailed  = feedResultsRDD.filter(!_).count()
- 
-    val avgChars: Long = if (totalFiltered > 0) {
+    val avgChars: Long = if (postsSuccess.value > 0) {
       val totalChars = filteredPostsRDD.map(p => p.title.length + p.selftext.length).sum().toLong
-      totalChars / totalFiltered
+      totalChars / postsSuccess.value
     } else 0L
  
     val stats = Map(
-      "feedsSuccess"   -> feedsSuccess.toInt,
-      "feedsFailed"    -> feedsFailed.toInt,
-      "postsSuccess"   -> totalDownloaded.toInt,
-      "postsFailed"    -> 0,
+      "feedsSuccess"   -> feedsSuccess.value.toInt,
+      "feedsFailed"    -> feedsFailed.value.toInt,
+      "postsSuccess"   -> postsSuccess.value.toInt,
+      "postsFailed"    -> postsFailed.value.toInt,
       "postsFiltered"  -> postsFiltered.toInt,
       "avgChars"       -> avgChars.toInt
     )
@@ -135,6 +150,12 @@ val paresRDD = entitiesRDD.map { entity =>
 
 // c) reduceByKey: sumar por clave → RDD[((String, String), Int)]
 val entityCountsRDD = paresRDD.reduceByKey(_ + _)
+
+val t2_inicio = System.currentTimeMillis()
+val finalEntities = entityCountsRDD.collect() 
+val t2_fin = System.currentTimeMillis()
+
+println(s"Accion terminal 2: ${(t2_fin - t2_inicio) / 1000.0} segundos")
 
 // d) Ordenar y mostrar
 val entityCounts: Map[(String, String), Int] = entityCountsRDD.collect().toMap
