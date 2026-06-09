@@ -76,20 +76,21 @@ object Main {
       }
     }
 
-
     val filteredPostsRDD = allPostsRDD.filter { post =>
       val nonEmpty =
         post.title.nonEmpty &&
         post.selftext.nonEmpty &&
         post.selftext.trim.nonEmpty
       if(nonEmpty) {
+//        println(s"Post válido: '${post.title}'")
         postsSuccess.add(1)
         true
       } else {
+//        println(s"Post descartado por texto vacío o nulo: '${post.title}'")
         postsFailed.add(1)
         false
       }
-    }
+    }.cache()
  
     val t1_inicio = System.currentTimeMillis()
 
@@ -131,40 +132,41 @@ object Main {
     }
  
     val dictionary = Dictionary.loadAll(cmdArgs.entitiesDir)
- 
-    val allEntities = filteredPostsRDD.flatMap { post =>
+
+    // a) flatMap: extraer entidades de cada post → RDD[NamedEntity]
+    val entitiesRDD = filteredPostsRDD.flatMap { post =>
       val combinedText = post.title + " " + post.selftext
       Analyzer.detectEntities(combinedText, dictionary)
-    }.collect().toList
- 
-    // a) flatMap: extraer entidades de cada post → RDD[NamedEntity]
-val entitiesRDD = filteredPostsRDD.flatMap { post =>
-  val combinedText = post.title + " " + post.selftext
-  Analyzer.detectEntities(combinedText, dictionary)
-}
+    }.cache()
 
-// b) map: convertir cada entidad en par ((tipo, nombre), 1)
-val paresRDD = entitiesRDD.map { entity =>
-  ((entity.entityType, entity.text), 1)
-}
+    // b) map: convertir cada entidad en par ((tipo, nombre), 1)
+    val paresRDD = entitiesRDD.map { entity =>
+      ((entity.entityType, entity.text), 1)
+    }
 
-// c) reduceByKey: sumar por clave → RDD[((String, String), Int)]
-val entityCountsRDD = paresRDD.reduceByKey(_ + _)
+    // c) reduceByKey: sumar por clave → RDD[((String, String), Int)]
+    val entityCountsRDD = paresRDD.reduceByKey(_ + _)
 
-val t2_inicio = System.currentTimeMillis()
-val finalEntities = entityCountsRDD.collect() 
-val t2_fin = System.currentTimeMillis()
+    val t2_inicio = System.currentTimeMillis()
+    val finalEntities = entityCountsRDD.collect()
+    val t2_fin = System.currentTimeMillis()
 
-println(s"Accion terminal 2: ${(t2_fin - t2_inicio) / 1000.0} segundos")
+    filteredPostsRDD.unpersist()
 
-// d) Ordenar y mostrar
-val entityCounts: Map[(String, String), Int] = entityCountsRDD.collect().toMap
+    println(s"Accion terminal 2: ${(t2_fin - t2_inicio) / 1000.0} segundos")
 
-val typeStats = Analyzer.countByType(entitiesRDD.collect().toList)
+    // d) Ordenar y mostrar
+    // Reuse the already-collected finalEntities instead of collecting entityCountsRDD again
+    val entityCounts: Map[(String, String), Int] = finalEntities.toMap
 
-println(Formatters.formatTypeStats(typeStats))
-println()
-println(Formatters.formatEntityStats(entityCounts, cmdArgs.topK))
+    // Collect entitiesRDD only once and reuse the result for local analysis
+    val entitiesList: List[NamedEntity] = entitiesRDD.collect().toList
+
+    val typeStats = Analyzer.countByType(entitiesList)
+
+    println(Formatters.formatTypeStats(typeStats))
+    println()
+    println(Formatters.formatEntityStats(entityCounts, cmdArgs.topK))
 
     }
 }

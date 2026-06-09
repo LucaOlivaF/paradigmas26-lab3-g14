@@ -35,6 +35,13 @@ El valor de un Accumulator solo se encuentra disponible y consolidado para ser l
 ### c) Comparen el tiempo que tarda cada etapa del pipeline que midieron en la versión no paralelizada y la versión con Spark. ¿Qué conclusiones pueden sacar? Para la cantidad de datos que estamos trabajando, ¿se aprecia la diferencia? Justifique por qué. Nota: La comparación debe realizarse en ejecuciones sobre la misma computadora y la misma conexión a internet.
 
 
+## Ejercicio 5
+### a) ¿Qué ocurriría si no llamaran a cache()? ¿Cuántas veces se ejecutaría la descarga de feeds?
+Cuando no se llama a cache() cada vez que se usa un RDD desde el driver vuelve a ejecutar los pasos del pipeline requeridos para llegar a ese RDD.
+En el caso de la descarga de feeds, como era el primer paso del pipeline era el que mas se repetia. En nuestro caso esto sucedia 5 veces por cada llamada de filteredPostsRDD que se usaba en main.
 
+### b) ¿Por qué es incorrecto llamar a collect() entre los pasos a) y b) del ejercicio 3 y luego continuar el pipeline? ¿Qué consecuencia tiene sobre la distribución deltrabajo?
+Es incorrecto llamar el collect() entre el flatmap del paso a) (entitiesRDD) y el map del paso b) (paresRDD) fuerza al driver a juntar los resultados de todos los workers ejecutando el paso a) antes de pasar al b). Esto rompe la paralelizacion de ambos pasos en el pipeline.
 
-
+### c) cache() es también lazy. ¿En qué momento se almacena realmente el RDD en memoria?
+Al usar cache() el RDD se almacena en memoria cuando se produce su primer accion terminal. Esto le da una ventaja sobre collect si el driver llama mas de una vez al RDD.
