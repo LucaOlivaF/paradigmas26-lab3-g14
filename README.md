@@ -1,127 +1,237 @@
-# Reddit Named Entity Recognition System
+# paradigmas26-lab3-g14
 
-This system downloads Reddit posts from specified subreddits and performs named entity recognition (NER) to extract and count entities like people, organizations, universities, programming languages, and places.
+Laboratorio 3 — Procesamiento distribuido con Apache Spark  
+Paradigmas de Programación 2026 — FAMAF
 
-## How It Works
+## Descripción
 
-The system combines functional and object-oriented programming paradigms:
+Este programa integra todas las funcionalidades de los laboratorios anteriores y las
+ejecuta de forma distribuida usando Apache Spark. Lee suscripciones a subreddits desde
+un archivo JSON, descarga los posts en paralelo, extrae entidades nombradas (personas,
+organizaciones, lugares, lenguajes de programación, etc.) y muestra estadísticas y
+rankings de las entidades más frecuentes.
 
-**Functional pipeline**: Downloads feeds from Reddit subscriptions → parses JSON posts → filters empty posts → applies entity detection → aggregates counts → produces formatted output.
+## Requisitos previos
 
-**Object-oriented design**: Entity types are modeled as a class hierarchy (Person, Organization, University, Place, Technology, ProgrammingLanguage) with polymorphic behavior. Dictionary loading and output formatting use encapsulated object methods.
+- **Java 17** (Spark 3.x no es compatible con Java 18+)
+- **sbt** (Scala Build Tool)
 
-## Requirements
+> Podés tener Java 21/24 instalado globalmente sin problema. El proyecto usa Java 17
+> solo para este laboratorio, sin cambiar la configuración global del sistema.
 
-- Java 11 or later
-- Scala 2.13
-- sbt 1.9 or later
+---
 
-## Setup
+## Instalación de dependencias
 
-1. Clone or extract the project
-2. No additional dependencies need manual installation—sbt will download them automatically on first build
+### Java 17
 
-## Building
-
+**Linux (Ubuntu/Debian)**
 ```bash
-sbt compile
+sudo apt update
+sudo apt install openjdk-17-jdk
 ```
 
-This downloads json4s and scopt libraries and compiles the Scala code.
+Para verificar la instalación:
+```bash
+java -version
+```
 
-## Running
+**macOS (con Homebrew)**
+```bash
+brew install openjdk@17
+sudo ln -sfn /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk \
+  /Library/Java/JavaVirtualMachines/openjdk-17.jdk
+```
 
-Basic usage with defaults:
+Para verificar que está disponible:
+```bash
+/usr/libexec/java_home -V
+```
+
+**Windows**
+
+Descargar el instalador de [Eclipse Temurin 17](https://adoptium.net/temurin/releases/?version=17)
+y seguir el asistente de instalación. Luego, en cada sesión de PowerShell donde se
+quiera correr el proyecto, ejecutar:
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.x.x.x-hotspot"
+$env:PATH = "$env:JAVA_HOME\bin;" + $env:PATH
+```
+
+### sbt
+
+**Linux (Ubuntu/Debian)**
+```bash
+echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list
+curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x99E82A75642AC823" | sudo apt-key add -
+sudo apt update
+sudo apt install sbt
+```
+
+**macOS**
+```bash
+brew install sbt
+```
+
+**Windows**
+
+Descargar el instalador `.msi` desde [scala-sbt.org](https://www.scala-sbt.org/download.html).
+
+---
+
+## Configuración del entorno
+
+Spark requiere flags especiales de Java para funcionar correctamente con Java 17.
+Estas opciones ya están configuradas en el archivo `build.sbt` del proyecto:
+
+```scala
+fork := true
+ThisBuild / javaOptions ++= Seq(
+  "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
+  "--add-opens=java.base/java.nio=ALL-UNNAMED"
+)
+```
+
+No es necesario modificar nada manualmente.
+
+---
+
+## Estructura del proyecto
+
+```
+paradigmas26-lab3-g14/
+├── build.sbt
+├── Makefile
+├── README.md
+├── INFORME.md
+├── data/
+│   ├── valid_subscriptions.json
+│   └── valid_entities/
+│       ├── people.txt
+│       ├── organizations.txt
+│       ├── universities.txt
+│       ├── places.txt
+│       └── languages.txt
+└── src/
+    └── main/
+        └── scala/
+            ├── Main.scala
+            ├── Analyzer.scala
+            ├── CommandLineArgs.scala
+            ├── Dictionary.scala
+            ├── FileIO.scala
+            ├── Formatters.scala
+            ├── JsonParser.scala
+            ├── NamedEntity.scala
+            ├── Post.scala
+            └── Subscription.scala
+```
+
+---
+
+## Ejecución
+
+### Opción 1 — con Make (recomendado)
+
+```bash
+make run
+```
+
+### Opción 2 — con sbt directamente
+
+**Linux**
+```bash
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
+PATH="$JAVA_HOME/bin:$PATH" \
+SBT_OPTS="--add-exports=java.base/sun.nio.ch=ALL-UNNAMED" \
+sbt run
+```
+
+Si tu distribución instala Java en una ruta distinta, podés encontrarla con:
+```bash
+update-alternatives --config java
+# o bien:
+readlink -f $(which java)
+```
+
+**macOS**
+```bash
+JAVA_HOME=$(/usr/libexec/java_home -v 17) \
+PATH="$JAVA_HOME/bin:$PATH" \
+SBT_OPTS="--add-exports=java.base/sun.nio.ch=ALL-UNNAMED" \
+sbt run
+```
+
+**Windows (PowerShell)**
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.x.x.x-hotspot"
+$env:PATH = "$env:JAVA_HOME\bin;" + $env:PATH
+$env:SBT_OPTS = "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED"
+sbt run
+```
+
+### Argumentos opcionales
+
+| Argumento | Descripción | Valor por defecto |
+|---|---|---|
+| `--subscription-file <ruta>` | Archivo JSON de suscripciones | `data/valid_subscriptions.json` |
+| `--entities-dir <ruta>` | Directorio de diccionarios de entidades | `data/valid_entities` |
+| `--top-k <n>` | Cantidad de entidades top a mostrar | `10` |
+
+Ejemplo:
+```bash
+sbt "run --subscription-file data/mis_subs.json --top-k 20"
+```
+
+---
+
+## Servidor mock local (para testing)
+
+Para evitar consultas reales a Reddit durante el desarrollo, podés usar el servidor
+mock incluido. En una terminal separada, desde la carpeta `reddit-mock/`:
+
 ```bash
 sbt run
 ```
 
-With custom parameters:
-```bash
-sbt "run --subscription-file subscriptions.json --entities-dir data --top-k 15"
+Deberías ver:
+```
+Fake Reddit API running on http://localhost:8123
+Press Ctrl+C to shut down.
 ```
 
-### Command-Line Arguments
+El servidor sirve posts estáticos de `r/scala`, `r/programming` y `r/learnpython` en
+el puerto `8123`. Para usarlo, cambiá las URLs en tu archivo de suscripciones para
+que apunten a `http://localhost:8123`.
 
-All arguments are optional:
+---
 
-- `--subscription-file <file>`: Path to JSON file containing Reddit subscriptions (default: `subscriptions.json`)
-- `--entities-dir <dir>`: Path to directory containing entity dictionary files (default: `data`)
-- `--top-k <n>`: Number of top entities to display (default: `10`)
+## Salida esperada
 
-## Project Structure
+```
+============ ESTADÍSTICAS DE PROCESAMIENTO ============
+Feeds descargados exitosamente:??? 
+Feeds fallidos: ???
+Posts descargados exitosamente:???
+Posts filtrados (vacíos/nulos):???
+Largo promedio en posts:???
 
-- `src/main/scala/`: Source code
-  - `Main.scala`: Entry point and orchestration
-  - `FileIO.scala`: File and network I/O operations
-  - `JsonParser.scala`: Reddit JSON parsing
-  - `Analyzer.scala`: Entity detection and counting logic
-  - `Dictionary.scala`: Entity dictionary loading
-  - `NamedEntity.scala`: Entity class hierarchy
-  - `Formatters.scala`: Output formatting
-  - `CommandLineArgs.scala`: Argument parsing
-  - `Subscription.scala`, `Post.scala`: Data structures
+============ ESTADÍSTICAS DE ENTIDADES ============
+Entidades totales:???
+Entidades por categoría:
+    [ProgrammingLanguage]:???
+    [Person]:???
+    ...
 
-- `data/`: Entity dictionary files and test data
-  - `people.txt`, `universities.txt`, `languages.txt`, `organizations.txt`, `places.txt`: Entity lists
-  - Test data directories for validation
-
-- `subscriptions.json`: List of Reddit subreddits to process
-
-## Understanding Entity Detection
-
-The system performs dictionary-based entity matching. It reads entity names from dictionary files, then searches for whole-word matches (case-insensitive) in post content. A word matches only if it appears as a complete word, not as part of another word (e.g., "Scala" matches but "java" does not match in "javascript").
-
-## Testing
-
-The system includes integration tests that verify:
-
-- Valid subscription processing with various top-k values
-- Error handling for malformed JSON subscriptions
-- Handling of unreachable URLs
-- Handling of incorrect subscription formats
-- Error detection for missing entity directories
-- Graceful degradation when some entity files are missing
-- Correct output counts for different top-k parameters
-- Default parameter behavior
-
-### Running Tests
-
-```bash
-bash tests.sh
+============ ENTIDADES NOMBRADAS MÁS FRECUENTES ============
+[Type=ProgrammingLanguage] Scala: ??? apariciones
+[Type=ProgrammingLanguage] Python: ??? apariciones
+...
 ```
 
-This runs all 9 integration tests and displays:
-- Individual test output with pass/fail results for each assertion
-- Summary showing total tests, passed, errors, and assertion failures
+---
 
-### Test Data
+## Autores
 
-The `data/` directory contains several test datasets:
-
-- `valid_subscriptions.json`: Clean subscriptions file used as baseline
-- `malformed_json_subscriptions.json`: Invalid JSON for error handling tests
-- `bad_url_subscriptions.json`: Subscriptions with unreachable URLs
-- `incorrect_format_subscriptions.json`: Subscriptions missing required fields
-- `valid_entities/`: Complete set of entity dictionary files
-- `missing_entities/`: Partial entity files for testing graceful degradation
-
-## Output Format
-
-The program prints two sections:
-
-**Processing Statistics**: Shows how many feeds were successfully downloaded, how many failed, how many posts were processed, filtered, and failed.
-
-**Top Named Entities**: Lists the most frequent entities by type and name, sorted by frequency (descending), then entity type (alphabetical), then entity name (alphabetical).
-
-## Error Handling
-
-The system handles failures gracefully:
-
-- Missing subscriptions file: Prints error and exits
-- Malformed JSON in subscriptions: Skips invalid entries, continues with valid ones
-- Network failures: Warns about failed downloads and continues with successful feeds
-- Missing entity directory: Prints error and exits
-- Missing individual entity files: Warns but continues with available dictionaries
-
-All errors are printed to console for visibility. The system continues processing valid data whenever possible.
+Grupo 14 — Paradigmas de Programación 2026, FAMAF(Axel Guevara, Fabrizio Reyna, Milena Juarez, Lucas Oliva)
