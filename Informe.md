@@ -31,8 +31,8 @@ Si en lugar de capturar el error adentro del flatMap dejaramos que la excepción
 Una partición puede contener varias suscripciones. Si una falla y no se captura, todas las suscripciones de esa partición se pierden, no solo la que falló.
 3. Si la partición era crítica, falla el job completo Spark termina el programa con una excepción como SparkException: Job aborted due to stage failure. No obtenemos ningún resultado parcial, todo el trabajo que hicieron los otros workers se descarta.
 
-##Ejercicio 3
-a) flatMap — extraer entidades de cada post
+## Ejercicio 3
+### a) flatMap — extraer entidades de cada post
 ¿Qué hace?
 Para cada Post del RDD, combinamos el título y el cuerpo en un solo string y llamamos a Analyzer.detectEntities, que devuelve una List[NamedEntity] con todas las entidades del diccionario que aparecen en ese texto.
 
@@ -45,7 +45,7 @@ detectada en algún post (puede haber duplicados, eso es intencional).
 ¿Dónde se ejecuta? En los workers. Cada worker procesa su partición del RDD de
 posts de forma completamente independiente del resto.
 
-b)map — convertir cada entidad en un par clave-valor
+### b)map — convertir cada entidad en un par clave-valor
 ¿Qué hace?
 Transforma cada NamedEntity en una tupla de la forma ((tipo, nombre), 1).
 Por ejemplo, si la entidad es ProgrammingLanguage("Scala"), produce:
@@ -60,7 +60,7 @@ Resultado: RDD[((String, String), Int)]
 ¿Dónde se ejecuta? En los workers. Es una transformación 1-a-1, completamente
 paralela e independiente.
 
-c) reduceByKey — sumar los conteos por entidad
+### c) reduceByKey — sumar los conteos por entidad
 ¿Qué hace?
 Agrupa todos los pares que tienen la misma clave (tipo, nombre) y aplica la función _ + _ (suma) sobre sus valores. Si "Scala" apareció 5 veces en el worker 1 y 3 veces en el worker 2, el resultado final para esa clave es 8.
 
@@ -69,7 +69,7 @@ entidad aparece exactamente una vez con su conteo total.
 
 ¿Dónde se ejecuta? Acá es donde ocurre algo diferente a los pasos anteriores: esto es una barrera de sincronización.
 
-d) Ordenar y mostrar los resultados
+### d) Ordenar y mostrar los resultados
 ¿Qué hace?
 Una vez que tenemos el RDD con los conteos finales, lo traemos al driver con collect() y lo convertimos a un Map. Luego usamos los formateadores del esqueleto (formatTypeStats y formatEntityStats) que ya estaban implementados, para imprimir las estadísticas en el formato correcto.
 
