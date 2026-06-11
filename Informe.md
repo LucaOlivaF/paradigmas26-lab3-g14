@@ -129,7 +129,15 @@ Un acumulador puede arrojar un valor duplicado o incorrecto cuando se encuentra 
 El valor de un Accumulator solo se encuentra disponible y consolidado para ser leído por el driver únicamente después de que una acción terminal se haya completado con éxito (por ejemplo, luego de un .count() o un .collect()). Esto se debe a que el accumulator no es procesado hasta que todos los workers envien sus contadores al driver. Si se intenta leer antes de la acción terminal, el acumulador devolverá siempre su valor inicial (0).
 
 ### c) Comparen el tiempo que tarda cada etapa del pipeline que midieron en la versión no paralelizada y la versión con Spark. ¿Qué conclusiones pueden sacar? Para la cantidad de datos que estamos trabajando, ¿se aprecia la diferencia? Justifique por qué. Nota: La comparación debe realizarse en ejecuciones sobre la misma computadora y la misma conexión a internet.
+| Versión del código      | Fase 1 | Fase 2 |
+|-------------------------|--------|--------|
+| Paralelizado con cache  | 5.374s | 0.206s |
+| Paralelizado sin cache  | 5.332s | 5.409s |
+| Sin paralelización | 15.876s | 0.051s |
 
+Hay una diferencia apreciable, pero difiere en dos partes del código.
+En la fase 1, que corresponde a la descarga de feeds y el procesado y filtrado de los posts, claramente hay una mejora a la hora de usar paralelización. Poder dividir entre workers la descarga de los feeds permite poder esperar las respuestas de los request en simultaneo, disminuyendo el tiempo de ejecución.
+En la fase 1, que corresponde al procesado de entidades nombradas, los resultados difieren bastante. Primero está la diferencia entre el paralelizado con y sin cache. Esta diferencia viene de que al no guardar los datos de la fase 1 con cache() la pipeline entera se vuelve a ejecutar, dandote un tiempo en sin cache similiar a la suma de la fase 1 y 2 de con cache. Por el otro lado, la versión sin paralelización es más rápida que las otras dos. Esto se debe a la poca cantidad de post y entidades nombradas que hay para procesar, haciendo que el tiempo que se toma spark en crear los workers y recibir los resultados sea mayor a lo q tomas simplemente procesarlos sin paralelización.
 
 ## Ejercicio 5
 ### a) ¿Qué ocurriría si no llamaran a cache()? ¿Cuántas veces se ejecutaría la descarga de feeds?
