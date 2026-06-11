@@ -23,6 +23,13 @@ Dada la paralelización de los workers con Spark, las restricciones del mecanism
 - Estado compartido: Dado que los workers son procesos independientes, si la función intenta modificar una variable externa normal, cada worker modificará una copia local de esa variable. El valor original en el Driver nunca cambiará.
 - Efectos secundarios: Las funciones que se pasan a Spark deberían ser "puras" (como lo define el paradigma funcional). Si un worker falla por un problema de red o falta de memoria, Spark es tolerante a fallos y puede volver a ejecutar esa misma tarea en otro worker. Si la función tenía un efecto secundario, al reejecutarse la tarea podría volver a producir ese efecto secundario.
 
+## Ejercicio 2
+### ¿Qué pasaría si dejaramos propagar la excepción?
+Si en lugar de capturar el error adentro del flatMap dejaramos que la excepción se propague, pasarían estas cosas en cadena:
+1. Spark reintenta la tarea. Cuando un worker lanza una excepción, Spark no falla inmediatamente. Primero reintenta la tarea en otro worker (por defecto 3 veces). Esto significa que esa descarga HTTP fallida se va a intentar 3 veces más, gastando tiempo y recursos innecesariamente.
+2. Si todos los reintentos fallan, falla la partición entera
+Una partición puede contener varias suscripciones. Si una falla y no se captura, todas las suscripciones de esa partición se pierden, no solo la que falló.
+3. Si la partición era crítica, falla el job completo Spark termina el programa con una excepción como SparkException: Job aborted due to stage failure. No obtenemos ningún resultado parcial, todo el trabajo que hicieron los otros workers se descarta.
 
 ## Ejercicio 4
 ### a) ¿Por qué los Accumulators solo deben usarse para métricas y no para tomar decisiones lógicas dentro de las etapas distribuidas del pipeline? ¿En qué situación un Accumulator puede dar un valor incorrecto?
