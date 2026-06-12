@@ -24,8 +24,9 @@ object Main {
     val feedsSuccess = sc.longAccumulator("Feeds descargados con exito")
     val feedsFailed = sc.longAccumulator("Feeds que fallaron")
     val postsSuccess = sc.longAccumulator("Posts descargados en total")
-    val postsFailed = sc.longAccumulator("Posts descartados por tener texto nulo o vacio")
- 
+    val postsFailed = sc.longAccumulator("Posts fallidos al parsear")
+    val postsFiltered = sc.longAccumulator("Posts filtrados (vacíos/nulos)")
+
     val subscriptions: List[Subscription] = FileIO.readSubscriptions(cmdArgs.subscriptionFile) match {
       case Left(errorMsg) =>
         // Error fatal: archivo no encontrado o JSON inválido
@@ -71,6 +72,7 @@ object Main {
  
             case Right(posts) =>
               feedsSuccess.add(1)
+              postsSuccess.add(posts.length)
               posts
           }
       }
@@ -81,19 +83,16 @@ object Main {
         post.title.nonEmpty &&
         post.selftext.nonEmpty &&
         post.selftext.trim.nonEmpty
-      if(nonEmpty) {
-        postsSuccess.add(1)
-        true
-      } else {
-        false
+      if(!nonEmpty) {
+        postsFiltered.add(1)
       }
+      nonEmpty
     }.cache()
  
     val t1_inicio = System.currentTimeMillis()
 
     val totalDownloaded = filteredPostsRDD.count()
     val t1_fin = System.currentTimeMillis()
-    val postsFiltered   =  totalDownloaded - postsSuccess.value
 
     println(s"Accion terminal 1: ${(t1_fin - t1_inicio) / 1000.0} segundos")
  
@@ -107,7 +106,7 @@ object Main {
       "feedsFailed"    -> feedsFailed.value.toInt,
       "postsSuccess"   -> postsSuccess.value.toInt,
       "postsFailed"    -> postsFailed.value.toInt,
-      "postsFiltered"  -> postsFiltered.toInt,
+      "postsFiltered"  -> postsFiltered.value.toInt,
       "avgChars"       -> avgChars.toInt
     )
  
