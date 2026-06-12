@@ -65,7 +65,7 @@ object Main {
         case Right(jsonContent) =>
           JsonParser.parsePosts(jsonContent, subscription) match {
             case Left(warningMsg) =>
-              feedsFailed.add(1)
+              postsFailed.add(1)
               println(warningMsg)
               List.empty[Post]
  
@@ -82,12 +82,9 @@ object Main {
         post.selftext.nonEmpty &&
         post.selftext.trim.nonEmpty
       if(nonEmpty) {
-//        println(s"Post válido: '${post.title}'")
         postsSuccess.add(1)
         true
       } else {
-//        println(s"Post descartado por texto vacío o nulo: '${post.title}'")
-        postsFailed.add(1)
         false
       }
     }.cache()
@@ -96,7 +93,7 @@ object Main {
 
     val totalDownloaded = filteredPostsRDD.count()
     val t1_fin = System.currentTimeMillis()
-    val postsFiltered   =  postsFailed.value
+    val postsFiltered   =  totalDownloaded - postsSuccess.value
 
     println(s"Accion terminal 1: ${(t1_fin - t1_inicio) / 1000.0} segundos")
  
